@@ -1,0 +1,141 @@
+# This is a clickable playing card tracker GUI to demonstrate Running Count (here as "RTV") vs True Count (TC) in Blackjack
+
+import tkinter as tk
+
+# Set Initial Parameters
+class CardCounterGUI(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("Card Counter")
+        self.remaining_value = 0
+        self.red_total_value = 0
+        self.black_total_value = 0
+        self.deck_count = tk.IntVar()
+        self.deck_count.set(0)
+        self.click_limits = {}
+        self.create_widgets()
+
+    def create_widgets(self):
+        # Input
+        input_frame = tk.Frame(self)
+        input_frame.pack(pady=10)
+        input_label = tk.Label(input_frame, text="Decks:")
+        input_label.pack(side=tk.LEFT)
+        input_entry = tk.Entry(input_frame, textvariable=self.deck_count, width=5)
+        input_entry.pack(side=tk.LEFT)
+
+        # Outputs
+        output_frame = tk.Frame(self)
+        output_frame.pack(pady=10)
+
+        remaining_label = tk.Label(output_frame, text="Remaining:")
+        remaining_label.grid(row=0, column=0)
+        self.remaining_value_label = tk.Label(output_frame, text="0")
+        self.remaining_value_label.grid(row=0, column=1)
+
+        rtv_label = tk.Label(output_frame, text="RTV:")
+        rtv_label.grid(row=1, column=0)
+        self.rtv_value_label = tk.Label(output_frame, text="0")
+        self.rtv_value_label.grid(row=1, column=1)
+
+        tc_label = tk.Label(output_frame, text="TC:")
+        tc_label.grid(row=2, column=0)
+        self.tc_value_label = tk.Label(output_frame, text="0.0")
+        self.tc_value_label.grid(row=2, column=1)
+
+        # Buttons
+        button_frame = tk.Frame(self)
+        button_frame.pack()
+
+        red_buttons = []
+        black_buttons = []
+        for i in range(13):
+            red_button = tk.Button(button_frame, text=self.get_card_label(i), fg="red",
+                                   command=lambda index=i: self.handle_red_card_click(index))
+            red_button.grid(row=i, column=0, padx=5, pady=5)
+            red_buttons.append(red_button)
+            self.click_limits[red_button] = 0
+
+            black_button = tk.Button(button_frame, text=self.get_card_label(i), fg="black",
+                                     command=lambda index=i: self.handle_black_card_click(index))
+            black_button.grid(row=i, column=1, padx=5, pady=5)
+            black_buttons.append(black_button)
+            self.click_limits[black_button] = 0
+
+        self.red_buttons = red_buttons
+        self.black_buttons = black_buttons
+
+        # Reset Button
+        reset_button = tk.Button(self, text="Reset", command=self.reset)
+        reset_button.pack(pady=10)
+
+    def get_card_label(self, index):
+        labels = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"]
+        return labels[index]
+
+    def handle_red_card_click(self, index):
+        button = self.red_buttons[index]
+        click_count = self.click_limits[button]
+        max_clicks = self.deck_count.get() * 2
+        if click_count < max_clicks:
+            card_label = self.get_card_label(index)
+            if card_label in ["2", "3", "4", "5", "6"]:
+                self.red_total_value += 1
+            elif card_label in ["10", "J", "Q", "K", "A"]:
+                self.red_total_value -= 1
+
+            self.remaining_value -= 1
+            self.update_output_labels()
+
+            self.click_limits[button] += 1
+            if self.click_limits[button] == max_clicks:
+                button.config(state=tk.DISABLED)
+
+            if self.remaining_value == 0:
+                self.disable_all_buttons()
+
+    def handle_black_card_click(self, index):
+        button = self.black_buttons[index]
+        click_count = self.click_limits[button]
+        max_clicks = self.deck_count.get() * 2
+        if click_count < max_clicks:
+            card_label = self.get_card_label(index)
+            if card_label in ["2", "3", "4", "5", "6"]:
+                self.black_total_value += 1
+            elif card_label in ["10", "J", "Q", "K", "A"]:
+                self.black_total_value -= 1
+
+            self.remaining_value -= 1
+            self.update_output_labels()
+
+            self.click_limits[button] += 1
+            if self.click_limits[button] == max_clicks:
+                button.config(state=tk.DISABLED)
+
+            if self.remaining_value == 0:
+                self.disable_all_buttons()
+
+    def update_output_labels(self):
+        self.remaining_value_label.config(text=str(self.remaining_value))
+        self.rtv_value_label.config(text=str(self.red_total_value + self.black_total_value))
+        self.tc_value_label.config(text="{:.1f}".format(((self.red_total_value + self.black_total_value)*52) / self.remaining_value))
+
+    def disable_all_buttons(self):
+        for button in self.red_buttons + self.black_buttons:
+            button.config(state=tk.DISABLED)
+
+    def reset(self):
+        self.remaining_value = self.deck_count.get() * 52
+        self.red_total_value = 0
+        self.black_total_value = 0
+        self.update_output_labels()
+
+        for button in self.red_buttons + self.black_buttons:
+            button.config(state=tk.NORMAL)
+            self.click_limits[button] = 0
+
+
+if __name__ == "__main__":
+    app = CardCounterGUI()
+    app.mainloop()
+
