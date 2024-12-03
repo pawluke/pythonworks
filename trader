@@ -1,0 +1,111 @@
+# This is a hypthetically functional trading bot designed to submit purchase orders based on the mean reversion algorithm
+
+import datetime
+from decimal import Decimal
+
+import pandas as pd
+from lumibot.backtesting import PandasDataBacktesting
+from lumibot.entities import Asset, Data, TradingFee
+from lumibot.strategies.strategy import Strategy
+
+
+class TrendFollowing1(Strategy):
+    parameters = {
+        "symbol": "BTC",
+        "period_length": 17,
+    }
+
+    def initialize(self):
+        self.sleeptime = "1D"
+        self.set_market("24/7")
+
+    def on_trading_iteration(self):
+        # Initial idea from on https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4081000
+        period_length = self.parameters["period_length"]
+        symbol = self.parameters["symbol"]
+        asset = Asset(symbol=symbol, asset_type="crypto")
+        historical_prices = self.get_historical_prices(
+            asset, period_length + 1, "day", quote=self.quote_asset
+        )
+        df = historical_prices.df
+        mean = df["close"].mean()
+        ema = df["close"].ewm(span=period_length).mean().iloc[-1]
+        cur_price = self.get_last_price(asset, quote=self.quote_asset)
+
+        # Buy the asset if the price is above the mean
+        if cur_price >= ema:
+            # Check if we own the asset already
+            position = self.get_position(asset)
+
+            if position is None:
+                last_price = self.get_last_price(asset, quote=self.quote_asset)
+                cash = self.cash * 0.96
+                quantity = Decimal(cash / last_price).quantize(Decimal("0.001"))
+
+                self.log_message(f"Buying {quantity} {asset.symbol} @ {last_price}")
+
+                order = self.create_order(
+                    asset, quantity, "buy", quote=self.quote_asset
+                )
+                self.submit_order(order)
+        # Sell the asset if the price is below the mean (if we own it)
+        else:
+            self.sell_all()
+
+
+if __name__ == "__main__":
+    # Backtest this strategy
+    backtesting_start = datetime.datetime(2021, 1, 18)
+    backtesting_end = datetime.datetime(2021, 12, 30)
+
+    # Set Asset and Quote
+    asset = Asset(symbol="BTC", asset_type="crypto")
+    quote_asset = Asset(symbol="USD", asset_type="forex")
+
+    # Load all the data
+    symbols = ["BTC"]
+    pandas_data = {}
+    for symbol in symbols:
+        # Get the path for the data
+        filepath = f"Day 5/data/Gemini_{symbol}USD_2021_1min.csv"
+
+        # Skip the first row since it's not the data we want
+        df = pd.read_csv(filepath, skiprows=1)
+
+        # Convert the date column to a datetime object that is timezone aware
+        df["Date"] = pd.to_datetime(df["Date"])
+        df = df.set_index("Date")
+        df.index = df.index.tz_localize("UTC")
+
+        # Create a Data object from the Pandas DataFrame and add it to the
+        # pandas_data dictionary
+        base_asset = Asset(symbol=symbol, asset_type="crypto")
+        quote_asset = Asset(symbol="USD", asset_type="forex")
+        pandas_data[(base_asset, quote_asset)] = Data(
+            base_asset, df, timestep="minute", quote=quote_asset
+        )
+
+    # 0.1% fee, loosely based on Kucoin (might actually be lower bc we're trading a lot)
+    # https://www.kucoin.com/vip/level
+    trading_fee = TradingFee(percent_fee=0.001)
+
+    min = 17
+    max = 17
+    period_length = min
+
+    while period_length <= max:
+        TrendFollowing1.backtest(
+            PandasDataBacktesting,
+            backtesting_start,
+            backtesting_end,
+            pandas_data=pandas_data,
+            benchmark_asset="BTC-USD",
+            quote_asset=quote_asset,
+            buy_trading_fees=[trading_fee],
+            sell_trading_fees=[trading_fee],
+            parameters={"period_length": period_length},
+            name=f"trend-following-1-{period_length}",
+        )
+
+        period_length += 1
+
