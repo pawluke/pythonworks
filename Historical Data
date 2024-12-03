@@ -1,0 +1,24 @@
+# A simple API script to pull historical stock trade data from Polygons website
+import requests
+
+# API Parameters
+base_url = 'https://api.polygon.io'
+api_key = 'BDUXK7tCP4ulX5Cyrw9eHKqS_VtEVud1'
+options_ticker = 'O:SPY251219C00650000'
+start_date = '2022-01-09'
+end_date = '2023-01-09'
+multiplier = 1
+timespan = 'day'
+
+# Construct the API request URL with parameters
+endpoint = f'/v2/aggs/ticker/{options_ticker}/range/{multiplier}/{timespan}/{start_date}/{end_date}?apiKey={api_key}'
+response = requests.get(base_url + endpoint)
+
+# Handle the API response
+if response.status_code == 200:
+    options_data = response.json()
+    # Process and save the options data as needed
+    # You might want to convert the JSON data into a DataFrame for further processing
+else:
+    print(f"API request failed with status code: {response.status_code}")
+
